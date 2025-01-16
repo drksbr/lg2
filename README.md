@@ -1,6 +1,6 @@
 # MultiGlass TUI - A Looking Glass Tool
 
-![Screenshot](https://via.placeholder.com/800x400?text=MultiGlass+TUI+Screenshot)
+![Screenshot](https://raw.githubusercontent.com/drksbr/lg2/refs/heads/main/screenshot.png)
 
 ## Overview
 
