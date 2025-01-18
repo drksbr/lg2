@@ -2,43 +2,86 @@ package tui
 
 import (
 	"fmt"
+	"log"
 
+	"github.com/drksbr/lg2/pkg/fetch"
 	"github.com/drksbr/lg2/pkg/parser"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
 type TUI struct {
-	App         *tview.Application
-	Grid        *tview.Grid
-	Logo        *tview.TextView
-	Shortcuts   *tview.TextView
-	PeersList   *tview.List
-	Content     *tview.TextView
-	Peers       []parser.Peer
+	// Main TUI
+	App *tview.Application
+
+	// Layout
+	Grid       *tview.Grid
+	LeftPannel *tview.Flex
+
+	// Blocks
+	Logo      *tview.TextView
+	Shortcuts *tview.TextView
+	PeersList *tview.List
+	Content   *tview.TextView
+
+	// Shortcut Actions
+	SearchForm   *tview.Form
+	NewQueryForm *tview.Form
+
+	// States
+	IsSearching bool
 	CurrentPeer int
+
+	// Data
+	originalPeers []parser.Peer
+	filteredPeers []parser.Peer
 }
 
 var (
-	mwLogo = `  ▒▒  ▒▓ ▒▒▒▒▓  ▓▒▒▒▒▒
+	mwLogo = `  [::b]▒▒  ▒▓ ▒▒▒▒▓  ▓▒▒▒▒▒
   ▓  ▓ ▒ ▒ ▒   ▓▒    ▒ 
  ▓   ▓▓   ▒ ▒  ▒ ▒  ▒  
- ▓▒▒▒▓▒ ▓▒▒▒▓ ▒▒▒  ▒▒    
+ ▓▒▒▒▓▒ ▓▒▒▒▓ ▒▒▒  ▒▒[::-]    
     MultiGlass V0.1`
 )
 
-// NewTUI configures and returns an instance of terminal user interface.
-func NewTUI(peers []parser.Peer) *TUI {
-	peersList := tview.NewList().ShowSecondaryText(false)
-	tui := &TUI{
-		App:         tview.NewApplication(),
-		Logo:        tview.NewTextView().SetTextAlign(tview.AlignCenter).SetDynamicColors(true).SetText(mwLogo),
-		Shortcuts:   tview.NewTextView().SetDynamicColors(true).SetText("Change ['Tab'] / Quit ['q']\nFind ['f'] / Query ['n']\nNav [←][→] / Select [↓][↑]"),
-		PeersList:   peersList,
-		Content:     tview.NewTextView().SetDynamicColors(true).SetWrap(false),
-		Peers:       peers,
-		CurrentPeer: 0,
+// Func to get data from API
+func GetDataFromAPI(queryString string) []parser.Peer {
+	// New Fetcher
+	data, err := fetch.GetLookingGlassData(queryString)
+	if err != nil {
+		log.Fatalf("Failed to fetch data: %v", err)
 	}
+
+	// Processar os resultados
+	peers, _ := parser.ParseHTML(data, queryString)
+
+	return peers
+}
+
+// NewTUI configures and returns an instance of terminal user interface.
+func NewTUI(queryString string) *TUI {
+
+	peers := GetDataFromAPI(queryString)
+
+	tui := &TUI{
+		App:           tview.NewApplication(),
+		Logo:          tview.NewTextView(),
+		Shortcuts:     tview.NewTextView().SetDynamicColors(true),
+		PeersList:     tview.NewList().ShowSecondaryText(false),
+		Content:       tview.NewTextView().SetDynamicColors(true).SetWrap(false),
+		originalPeers: peers,
+		filteredPeers: peers,
+		SearchForm:    tview.NewForm(),
+		NewQueryForm:  tview.NewForm(),
+		IsSearching:   false,
+		CurrentPeer:   0,
+	}
+
+	// Configure Logo
+	tui.Logo.SetTextAlign(tview.AlignCenter).
+		SetDynamicColors(true).
+		SetText(mwLogo)
 
 	// Configure Peer List
 	tui.PeersList.SetBackgroundColor(tcell.ColorDefault)
@@ -68,20 +111,63 @@ func NewTUI(peers []parser.Peer) *TUI {
 	tui.Shortcuts.SetBorderColor(tcell.ColorDefault)
 	tui.Shortcuts.SetTitleColor(tcell.ColorDefault)
 	tui.Shortcuts.SetTitle(" Shortcuts ").SetBorder(true)
+	tui.Shortcuts.SetText("Change ['Tab'] / Quit ['q']\nFind ['f'] / Query ['n']\nNav [←][→] / Select [↓][↑]")
+
+	// Criar Search Box
+	tui.SearchForm.SetBackgroundColor(tcell.ColorDefault)
+	tui.SearchForm.SetBorderColor(tcell.ColorDefault)
+	tui.SearchForm.SetTitleColor(tcell.ColorDefault)
+	tui.SearchForm.SetFieldBackgroundColor(tcell.ColorDarkGray)
+	tui.SearchForm.SetFieldTextColor(tcell.ColorDefault)
+	tui.SearchForm.SetTitle(" Find Peer ").SetBorder(true)
+
+	// Configurar searchInput
+	searchInput := tview.NewInputField()
+	searchInput.SetChangedFunc(func(text string) {
+		tui.filterAndUpdatePeersList(text)
+	})
+
+	captionBack := tview.NewTextView()
+	captionBack.SetText("Back ['ESQ']").
+		SetSize(1, 20).SetTextAlign(tview.AlignLeft)
+
+	tui.SearchForm.AddFormItem(searchInput)
+	tui.SearchForm.AddFormItem(captionBack)
+
+	// Criar New Query Form
+	tui.NewQueryForm.SetBackgroundColor(tcell.ColorDefault)
+	tui.NewQueryForm.SetBorderColor(tcell.ColorDefault)
+	tui.NewQueryForm.SetTitleColor(tcell.ColorDefault)
+	tui.NewQueryForm.SetFieldBackgroundColor(tcell.ColorDarkGray)
+	tui.NewQueryForm.SetFieldTextColor(tcell.ColorDefault)
+	tui.NewQueryForm.SetTitle(" New Query ").SetBorder(true)
+
+	// Configurar Query Form
+	newQueryInput := tview.NewInputField()
+	newQueryInput.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			tui.updateTUIWithNewQuery(newQueryInput.GetText())
+			tui.App.SetFocus(newQueryInput) // Keep focus on the input field
+			return
+		}
+	})
+
+	tui.NewQueryForm.AddFormItem(newQueryInput)
+	tui.NewQueryForm.AddFormItem(captionBack)
 
 	// Configure Content
 	tui.Content.SetBackgroundColor(tcell.ColorDefault)
 	tui.Content.SetTextColor(tcell.ColorDefault)
 	tui.Content.SetTitle(" Looking Glass Details ").SetBorder(true).SetBorderColor(tcell.ColorDefault)
 	tui.Content.SetTitleColor(tcell.ColorDefault)
-	tui.Content.SetWrap(true)
+	tui.Content.SetWrap(false)
 
 	// Setup Focus Cycling
 	SetupFocusCycling(tui.App, tui.PeersList, tui.Content, tui.Grid)
 
 	// Configure Peers List
 	for i, peer := range peers {
-		tui.PeersList.AddItem(fmt.Sprintf("[ %d ] %s", i+1, peer.PeerName), "", 0, func(index int) func() {
+		tui.PeersList.AddItem(fmt.Sprintf("[%02d] %s", i+1, peer.PeerName), "", 0, func(index int) func() {
 			return func() {
 				tui.CurrentPeer = index
 				tui.updateContent()
@@ -94,44 +180,88 @@ func NewTUI(peers []parser.Peer) *TUI {
 	}
 
 	// Configure Grid Layout
-	left := tview.NewFlex().SetDirection(tview.FlexRow).
+	tui.LeftPannel = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(tui.Logo, 7, 1, false).
 		AddItem(tui.Shortcuts, 5, 1, false).
 		AddItem(tui.PeersList, 0, 1, true)
 
 	tui.Grid = tview.NewGrid().SetRows(0).SetColumns(30, 0).
 		SetBorders(false).
-		AddItem(left, 0, 0, 1, 1, 0, 0, true).
+		AddItem(tui.LeftPannel, 0, 0, 1, 1, 0, 0, true).
 		AddItem(tui.Content, 0, 1, 1, 1, 0, 0, false)
 
-	// Configure Keybindings
-	tui.App.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyTab: // Cycle through the content box
-			CycleFocus(tui.App, tui.PeersList, tui.Content, tui.Grid)
+	// Inicializar BoxComponent
+	// tui.BoxComponent = NewBoxComponent(tui.Grid)
 
-		case tcell.KeyBacktab: // Cycle through the focusable elements
-			CycleFocus(tui.App, tui.PeersList, tui.Content, tui.Grid)
-
-		case tcell.KeyRune:
-			if event.Rune() == 'q' || event.Rune() == 'Q' {
-				tui.App.Stop()
-			}
-		}
-		return event
-	})
+	// Adicionar setup de keyboard shortcuts
+	tui.SetupKeyboardShortcuts()
 
 	return tui
 }
 
+// Modificar a função de captura de eventos
+func (tui *TUI) SetupKeyboardShortcuts() {
+	tui.App.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if (event.Rune() == 'f' || event.Rune() == 'F') && !tui.IsSearching {
+			tui.IsSearching = true
+			// Substitui diretamente no Flex
+			tui.LeftPannel.RemoveItem(tui.Shortcuts)
+			tui.LeftPannel.RemoveItem(tui.PeersList)
+			tui.LeftPannel.AddItem(tui.SearchForm, 7, 1, true)
+			tui.LeftPannel.AddItem(tui.PeersList, 0, 1, false)
+
+			tui.App.SetFocus(tui.SearchForm)
+			return nil
+		}
+
+		if (event.Rune() == 'n' || event.Rune() == 'N') && !tui.IsSearching {
+			tui.IsSearching = true
+			// Substitui diretamente no Flex
+			tui.LeftPannel.RemoveItem(tui.Shortcuts)
+			tui.LeftPannel.RemoveItem(tui.PeersList)
+			tui.LeftPannel.AddItem(tui.NewQueryForm, 7, 1, true)
+			tui.LeftPannel.AddItem(tui.PeersList, 0, 1, false)
+
+			tui.App.SetFocus(tui.NewQueryForm)
+			return nil
+		}
+
+		if event.Key() == tcell.KeyEsc && tui.IsSearching {
+			tui.IsSearching = false
+			tui.LeftPannel.RemoveItem(tui.SearchForm)
+			tui.LeftPannel.RemoveItem(tui.PeersList)
+			tui.LeftPannel.RemoveItem(tui.NewQueryForm)
+			tui.LeftPannel.AddItem(tui.Shortcuts, 5, 1, false)
+			tui.LeftPannel.AddItem(tui.PeersList, 0, 1, true)
+
+			tui.App.SetFocus(tui.PeersList)
+			return nil
+		}
+
+		// Quit the application when 'q' or 'Q' and tui.IsSearching is false is pressed
+		if (event.Rune() == 'q' || event.Rune() == 'Q') && !tui.IsSearching {
+			tui.App.Stop()
+			return nil
+		}
+
+		// Navigate through boxes
+		if event.Key() == tcell.KeyTab {
+			CycleFocus(tui.App, tui.PeersList, tui.Content, tui.Grid)
+			return nil
+		}
+
+		return event
+	})
+}
+
 // updateContent updates the details of the selected peer.
 func (tui *TUI) updateContent() {
-	if len(tui.Peers) == 0 {
+	if len(tui.filteredPeers) == 0 {
 		tui.Content.SetText("Nenhum peer encontrado.")
 		return
 	}
 
-	peer := tui.Peers[tui.CurrentPeer]
+	peer := tui.filteredPeers[tui.CurrentPeer]
 	details := buildPeerDetails(&peer)
 
 	// Set the text of the content box
