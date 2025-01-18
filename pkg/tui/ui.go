@@ -47,7 +47,7 @@ func NewTUI(peers []parser.Peer) *TUI {
 	tui.PeersList.SetSelectedBackgroundColor(tcell.ColorDarkGrey)
 	tui.PeersList.SetBorderColor(tcell.ColorDefault)
 	tui.PeersList.SetTitleColor(tcell.ColorDefault)
-	tui.PeersList.SetTitle(" Peers ")
+	tui.PeersList.SetTitle(fmt.Sprintf(" %s(%d) ", "Peers", len(peers)))
 	tui.PeersList.SetBorder(true)
 
 	// Run function on item selected on peerlist
