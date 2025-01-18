@@ -6,7 +6,7 @@ import (
 	"github.com/drksbr/lg2/pkg/cli"
 	"github.com/drksbr/lg2/pkg/fetch"
 	"github.com/drksbr/lg2/pkg/parser"
-	tui "github.com/drksbr/lg2/pkg/ui"
+	"github.com/drksbr/lg2/pkg/tui"
 )
 
 func main() {
@@ -21,17 +21,7 @@ func main() {
 	}
 
 	// Processar os resultados
-	results, _ := parser.ParsePeersFromHTML(htmlData)
-
-	// Print na tela os resultados
-	// for _, peer := range results {
-	// 	fmt.Printf("Peer Nome: %s\n", peer.PeerName)
-	// 	fmt.Printf("Caminho de ASNs:\n")
-	// 	for _, asPath := range peer.Path {
-	// 		fmt.Printf("  ASN: %d, Nome: %s\n", asPath.AsNumber, asPath.AsName)
-	// 	}
-	// 	fmt.Println()
-	// }
+	results, _ := parser.ParseHTML(htmlData, query)
 
 	// // Exibir interface interativa
 	t := tui.NewTUI(results)
