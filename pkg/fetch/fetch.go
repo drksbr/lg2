@@ -6,23 +6,23 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
+	"strings"
 )
 
 var (
 	debug      bool   = false
-	saveSample bool   = false
+	saveSample bool   = true
 	url        string = "https://lg.ring.nlnog.net/prefix"
 )
 
 // Func to save html data to a file
-func saveHTML(htmlData string) {
+func saveHTML(htmlData string, query string) {
 	// Create samples directory if it doesn't exist
 	if err := os.MkdirAll("samples", 0755); err != nil {
 		log.Fatal(err)
 	}
-	timestamp := time.Now().Format("20060102-150405")
-	f, err := os.Create(fmt.Sprintf("samples/sample-%s.html", timestamp))
+	// timestamp := time.Now().Format("20060102-150405")
+	f, err := os.Create(fmt.Sprintf("samples/sample-%s.html", query))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func saveHTML(htmlData string) {
 // GetLookingGlassData makes an HTTP request to the Looking Glass.
 func GetLookingGlassData(query string) (string, error) {
 	if debug {
-		url = "http://localhost:49445/sample"
+		url = "http://localhost:3000/sample"
 	}
 
 	client := &http.Client{}
@@ -79,7 +79,19 @@ func GetLookingGlassData(query string) (string, error) {
 
 	// Save sample HTML data to a file
 	if saveSample {
-		saveHTML(string(body))
+		// Replace incompatible characters in query with '_'
+		safeQuery := strings.NewReplacer(
+			"/", "_",
+			"\\", "_",
+			":", "_",
+			"*", "_",
+			"?", "_",
+			"\"", "_",
+			"<", "_",
+			">", "_",
+			"|", "_",
+		).Replace(query)
+		saveHTML(string(body), safeQuery)
 	}
 
 	return string(body), nil
