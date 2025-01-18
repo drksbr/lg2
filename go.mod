@@ -5,6 +5,7 @@ go 1.23.1
 require (
 	github.com/PuerkitoBio/goquery v1.10.1
 	github.com/biter777/countries v1.7.5
+	github.com/gdamore/tcell v1.4.0
 	github.com/gdamore/tcell/v2 v2.8.1
 	github.com/rivo/tview v0.0.0-20241227133733-17b7edb88c57
 )
