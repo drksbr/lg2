@@ -55,7 +55,7 @@ func (tui *TUI) GetDataFromAPI(queryString string) ([]parser.Peer, error) {
 	}
 
 	// Parse results
-	peers, err := parser.ParseHTML(data, queryString)
+	peers, err := parser.ParseHTML(data, network.String())
 	if err != nil {
 		done <- true
 		return nil, err
