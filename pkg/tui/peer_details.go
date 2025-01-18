@@ -19,7 +19,7 @@ func buildPeerDetails(peer *parser.Peer) string {
 	// Append AS path details
 	details.WriteString("[::b]Sequential:[::-]\n")
 	for i, as := range peer.AsPath {
-		details.WriteString(fmt.Sprintf("     [%02d] |%s| [::b]AS%d[::-] (%s)\n", i+1, as.Country, as.AsNumber, as.AsName))
+		details.WriteString(fmt.Sprintf("     [%02d] |%s| [::b]AS%d[::-] (%s)\n", i+1, CountryToFlag(as.Country), as.AsNumber, as.AsName))
 	}
 	details.WriteString("\n")
 

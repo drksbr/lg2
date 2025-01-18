@@ -11,7 +11,7 @@ import (
 
 var (
 	debug      bool   = false
-	saveSample bool   = true
+	saveSample bool   = false
 	url        string = "https://lg.ring.nlnog.net/prefix"
 )
 

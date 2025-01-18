@@ -110,6 +110,19 @@ func ParseHTML(htmlData string, prefix string) ([]Peer, error) {
 }
 
 func GetNetworkFromPrefix(prefix string) (*net.IPNet, error) {
+
+	// Check if prefix is a domain name and resolve it
+	if strings.Contains(prefix, ".") {
+		ips, err := net.LookupIP(prefix)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve domain: %v", err)
+		}
+		if len(ips) == 0 {
+			return nil, fmt.Errorf("no IP addresses found for domain")
+		}
+		prefix = ips[0].String()
+	}
+
 	// Add default mask if not provided
 	if !strings.Contains(prefix, "/") {
 		ip := net.ParseIP(prefix)

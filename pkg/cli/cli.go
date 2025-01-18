@@ -37,22 +37,18 @@ func run(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	if err := searchPrefix(cmd, args); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-}
-
-func searchPrefix(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("é necessário informar um prefixo")
+	// Se não houver argumentos, exibir a interface interativa
+	if len(args) == 0 {
+		// // Exibir interface interativa
+		t := tui.NewTUI("")
+		t.Start()
+		return
 	}
 
+	// Se houver argumentos, exibir o resultado da consulta
 	// // Exibir interface interativa
 	t := tui.NewTUI(args[0])
 	t.Start()
-
-	return nil
 }
 
 func Execute() {

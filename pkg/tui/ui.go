@@ -68,6 +68,15 @@ func NewTUI(queryString string) *TUI {
 	}
 
 	go func() {
+		// If queryString is empty, show help message on the content box
+		if queryString == "" {
+			tui.App.QueueUpdateDraw(func() {
+				help := "Welcome to MultiGlass!\nTo start, type the prefix you want\nin new query box [::b](n + prefix + enter)[::-]."
+				tui.Content.SetText(fmt.Sprintf("[::b]Help:[::-] %s", help))
+			})
+			return
+		}
+
 		// Make query to API
 		peers, err := tui.GetDataFromAPI(queryString)
 		if err != nil {
@@ -165,7 +174,7 @@ func NewTUI(queryString string) *TUI {
 	newQueryInput.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEnter {
 			tui.updateTUIWithNewQuery(newQueryInput.GetText())
-			tui.App.SetFocus(newQueryInput) // Keep focus on the input field
+			// tui.App.SetFocus(tui.PeersList) // Keep focus on the input field
 			return
 		}
 	})

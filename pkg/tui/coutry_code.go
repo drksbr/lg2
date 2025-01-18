@@ -26,7 +26,7 @@ func CountryToFlag(countryCode string) string {
 	countryes := countries.All()
 	for _, country := range countryes {
 		if country.Alpha2() == countryCode {
-			return country.Emoji()
+			return country.Emoji3()
 		}
 	}
 

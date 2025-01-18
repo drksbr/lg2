@@ -112,7 +112,7 @@ func (tui *TUI) updateTUIWithNewQuery(queryString string) {
 		newPeers, err := tui.GetDataFromAPI(queryString)
 		if err != nil {
 			tui.App.QueueUpdateDraw(func() {
-				tui.Content.SetText(fmt.Sprintf("Error: %s", err))
+				tui.Content.SetText(fmt.Sprintf("Error: %s", err),)
 				tui.PeersList.SetTitle(" Peers(0) ")
 			})
 			return
@@ -137,6 +137,10 @@ func (tui *TUI) updateTUIWithNewQuery(queryString string) {
 				tui.CurrentPeer = 0
 				tui.updateContent()
 			}
+
+			tui.SearchForm.Clear(true) // Limpar formulário de busca
+			// set focus on the peers list
+			tui.App.SetFocus(tui.PeersList)
 		})
 	}()
 }
