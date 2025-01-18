@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 
@@ -106,4 +107,24 @@ func ParseHTML(htmlData string, prefix string) ([]Peer, error) {
 	})
 
 	return peers, nil
+}
+
+func GetNetworkFromPrefix(prefix string) (*net.IPNet, error) {
+	// Add default mask if not provided
+	if !strings.Contains(prefix, "/") {
+		ip := net.ParseIP(prefix)
+		if ip != nil {
+			if ip.To4() != nil {
+				prefix += "/24"
+			} else {
+				prefix += "/48"
+			}
+		}
+	}
+
+	_, network, err := net.ParseCIDR(prefix)
+	if err != nil {
+		return nil, fmt.Errorf("invalid prefix: %v", err)
+	}
+	return network, nil
 }
