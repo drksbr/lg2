@@ -5,134 +5,105 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/net/html"
+	"github.com/PuerkitoBio/goquery"
 )
 
-// AsPath representa um item de um caminho AS (Autonomous System).
 type AsPath struct {
 	AsNumber int    // Número do AS
 	AsName   string // Nome do AS
+	Country  string // Sigla do país
 }
 
-// Peer representa os dados de um peer.
 type Peer struct {
-	PeerName string   // Nome do peer (extraído de "[ ]")
-	Path     []AsPath // Caminho de ASNs
+	PeerName          string   // Nome do peer
+	AsPath            []AsPath // Caminho de ASNs
+	OriginValidation  string   // Estado de validação de origem
+	AspaValidation    string   // Estado de validação ASPA
+	OnlyToCustomerOTC string   // Informações de "Only To Customer"
+	Origin            string   // Origem
+	Med               string   // MED (Multi Exit Discriminator)
+	LastUpdate        string   // Última atualização
+	Communities       []string // Comunidades
+	Prefix            string   // Prefixo
 }
 
-// ParsePeersFromHTML processa o HTML, divide os peers em partes e preenche as structs.
-func ParsePeersFromHTML(htmlData string) ([]Peer, error) {
+// ParseHTML parses the updated HTML format and extracts peer information
+func ParseHTML(htmlData string, prefix string) ([]Peer, error) {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse HTML: %v", err)
+	}
+
 	var peers []Peer
 
-	// Parse o HTML em uma árvore de nós
-	doc, err := html.Parse(strings.NewReader(htmlData))
-	if err != nil {
-		return nil, fmt.Errorf("erro ao carregar HTML: %v", err)
-	}
+	doc.Find("div.peername").Each(func(index int, peerNode *goquery.Selection) {
+		peer := Peer{}
 
-	// Função auxiliar para encontrar o nó com ID bgpresults
-	var findNodeByID func(*html.Node, string) *html.Node
-	findNodeByID = func(n *html.Node, id string) *html.Node {
-		if n.Type == html.ElementNode {
-			for _, attr := range n.Attr {
-				if attr.Key == "id" && attr.Val == id {
-					return n
-				}
-			}
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			if found := findNodeByID(c, id); found != nil {
-				return found
-			}
-		}
-		return nil
-	}
+		// Set Prefix
+		peer.Prefix = prefix
 
-	// Encontrar o nó com ID "bgpresults"
-	bgpResults := findNodeByID(doc, "bgpresults")
-	if bgpResults == nil {
-		return nil, fmt.Errorf("div com id='bgpresults' não encontrada")
-	}
+		// Extract Peer Name
+		peer.PeerName = strings.Split(strings.TrimSpace(peerNode.Find(".me-auto").Text()), " ")[1]
 
-	// Função auxiliar para renderizar o HTML interno de um nó
-	renderHTML := func(n *html.Node) string {
-		var sb strings.Builder
-		html.Render(&sb, n)
-		return sb.String()
-	}
+		// Navigate to the corresponding table for the peer
+		peerTable := peerNode.NextFiltered("table")
 
-	// Renderizar o HTML interno de bgpresults
-	bgpResultsHTML := renderHTML(bgpResults)
+		peerTable.Find("tr").Each(func(_ int, row *goquery.Selection) {
+			header := strings.TrimSpace(row.Find("td:first-child").Text())
+			data := row.Find("td")
 
-	// Dividir o conteúdo da div em partes que iniciam com "unicast ["
-	parts := strings.Split(bgpResultsHTML, "unicast [")
+			switch header {
+			case "AS-Path":
+				var asPath []AsPath
+				data.Find("button").Each(func(_ int, btn *goquery.Selection) {
+					number, _ := strconv.Atoi(btn.Find("a.whois.asn").Text())
+					name := btn.AttrOr("title", "")
 
-	// Processar cada parte
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-
-		// Extrair PeerName
-		peerNameEnd := strings.Index(part, "]")
-		if peerNameEnd == -1 {
-			continue
-		}
-		rawPeerName := strings.TrimSpace(part[:peerNameEnd])
-
-		// Melhor tratamento do nome do peer
-		peerName := strings.ReplaceAll(rawPeerName, "0000-00-00", "")
-		peerName = strings.ReplaceAll(peerName, "\n", "")
-		peerName = strings.TrimSpace(peerName)
-
-		peerNameParts := strings.Split(peerName, "-")
-		if len(peerNameParts) > 1 {
-			peerName = strings.TrimSpace(peerNameParts[0]) + " - " + strings.TrimSpace(peerNameParts[1])
-		}
-
-		// Criar uma lista de AsPath
-		var path []AsPath
-		subDoc, err := html.Parse(strings.NewReader(part))
-		if err != nil {
-			return nil, fmt.Errorf("erro ao processar parte do peer: %v", err)
-		}
-
-		// Encontrar todos os elementos <abbr> na parte atual
-		var findAbbr func(*html.Node)
-		findAbbr = func(n *html.Node) {
-			if n.Type == html.ElementNode && n.Data == "abbr" {
-				var asNumber int
-				var asName string
-				for _, attr := range n.Attr {
-					if attr.Key == "title" {
-						asName = attr.Val
+					// Extract Country from the name if available
+					var country string
+					if parts := strings.Split(name, ","); len(parts) > 1 {
+						country = strings.ToUpper(strings.TrimSpace(parts[len(parts)-1])[:2])
+						name = strings.TrimSpace(parts[0])
 					}
-				}
-				if n.FirstChild != nil && n.FirstChild.Type == html.TextNode {
-					asNumberStr := strings.TrimSpace(n.FirstChild.Data)
-					asNumber, _ = strconv.Atoi(asNumberStr)
-				}
-				if asNumber != 0 && asName != "" {
-					path = append(path, AsPath{
-						AsNumber: asNumber,
-						AsName:   asName,
-					})
-				}
-			}
-			for c := n.FirstChild; c != nil; c = c.NextSibling {
-				findAbbr(c)
-			}
-		}
 
-		findAbbr(subDoc)
+					// Discard anything after <br> in the name
+					if brIndex := strings.Index(name, "<br>"); brIndex != -1 {
+						name = strings.TrimSpace(name[:brIndex])
+					}
 
-		// Adicionar o Peer à lista
-		peers = append(peers, Peer{
-			PeerName: peerName,
-			Path:     path,
+					asPath = append(asPath, AsPath{AsNumber: number, AsName: name, Country: country})
+				})
+				peer.AsPath = asPath
+
+			case "Origin validation state":
+				peer.OriginValidation = data.Text()
+
+			case "ASPA validation state":
+				peer.AspaValidation = data.Text()
+
+			case "Only To Customer (OTC)":
+				peer.OnlyToCustomerOTC = data.Text()
+
+			case "Origin":
+				peer.Origin = data.Text()
+
+			case "MED":
+				peer.Med = strings.TrimPrefix(data.Text(), "MED")
+
+			case "Last update":
+				peer.LastUpdate = strings.TrimSpace(strings.TrimPrefix(data.Text(), "Last update"))
+
+			case "Communities":
+				var communities []string
+				data.Find("button").Each(func(_ int, btn *goquery.Selection) {
+					communities = append(communities, btn.Text())
+				})
+				peer.Communities = communities
+			}
 		})
-	}
+
+		peers = append(peers, peer)
+	})
 
 	return peers, nil
 }
