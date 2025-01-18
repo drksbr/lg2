@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 
+	"github.com/drksbr/lg2/pkg/config"
 	"github.com/drksbr/lg2/pkg/parser"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -41,7 +42,7 @@ var (
   ▓  ▓ ▒ ▒ ▒   ▓▒    ▒ 
  ▓   ▓▓   ▒ ▒  ▒ ▒  ▒  
  ▓▒▒▒▓▒ ▓▒▒▒▓ ▒▒▒  ▒▒[::-]    
-    MultiGlass V0.1`
+    MultiGlass v%s`
 )
 
 // NewTUI configures and returns an instance of terminal user interface.
@@ -98,7 +99,7 @@ func NewTUI(queryString string) *TUI {
 	// Configure Logo
 	tui.Logo.SetTextAlign(tview.AlignCenter).
 		SetDynamicColors(true).
-		SetText(mwLogo)
+		SetText(fmt.Sprintf(mwLogo, config.Version))
 
 	// Configure Peer List
 	tui.PeersList.SetBackgroundColor(tcell.ColorDefault)
