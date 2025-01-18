@@ -3,9 +3,9 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"net"
 	"os"
-	"strings"
+
+	"github.com/drksbr/lg2/pkg/parser"
 )
 
 // ParseArgs lida com argumentos da linha de comando.
@@ -26,27 +26,17 @@ func ParseArgs() string {
 	}
 
 	prefix := args[0]
-	// Add default mask if not provided
-	if !strings.Contains(prefix, "/") {
-		ip := net.ParseIP(prefix)
-		if ip != nil {
-			if ip.To4() != nil {
-				prefix += "/24"
-			} else {
-				prefix += "/48"
-			}
-		}
+
+	network, err := parser.GetNetworkFromPrefix(prefix)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
-	if !isValidPrefix(prefix) {
-		fmt.Fprintf(os.Stderr, "Erro: prefixo inválido '%s'\n", prefix)
+	if network == nil {
+		fmt.Println("Prefixo inválido")
 		os.Exit(1)
 	}
 
 	return prefix
-}
-
-func isValidPrefix(prefix string) bool {
-	_, network, err := net.ParseCIDR(prefix)
-	return err == nil && network != nil
 }
