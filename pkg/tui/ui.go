@@ -2,9 +2,7 @@ package tui
 
 import (
 	"fmt"
-	"log"
 
-	"github.com/drksbr/lg2/pkg/fetch"
 	"github.com/drksbr/lg2/pkg/parser"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -30,6 +28,7 @@ type TUI struct {
 
 	// States
 	IsSearching bool
+	IsQuerying  bool
 	CurrentPeer int
 
 	// Data
@@ -45,25 +44,13 @@ var (
     MultiGlass V0.1`
 )
 
-// Func to get data from API
-func GetDataFromAPI(queryString string) []parser.Peer {
-	// New Fetcher
-	data, err := fetch.GetLookingGlassData(queryString)
-	if err != nil {
-		log.Fatalf("Failed to fetch data: %v", err)
-	}
-
-	// Processar os resultados
-	peers, _ := parser.ParseHTML(data, queryString)
-
-	return peers
-}
-
 // NewTUI configures and returns an instance of terminal user interface.
 func NewTUI(queryString string) *TUI {
 
-	peers := GetDataFromAPI(queryString)
+	// Blank Peer List
+	peers := []parser.Peer{}
 
+	// Create TUI
 	tui := &TUI{
 		App:           tview.NewApplication(),
 		Logo:          tview.NewTextView(),
@@ -75,8 +62,38 @@ func NewTUI(queryString string) *TUI {
 		SearchForm:    tview.NewForm(),
 		NewQueryForm:  tview.NewForm(),
 		IsSearching:   false,
+		IsQuerying:    false,
 		CurrentPeer:   0,
 	}
+
+	go func() {
+		// Make query to API
+		peers, err := tui.GetDataFromAPI(queryString)
+		if err != nil {
+			tui.App.QueueUpdateDraw(func() {
+				tui.Content.SetText(fmt.Sprintf("Error: %s", err))
+				tui.PeersList.SetTitle(" Peers(0) ")
+			})
+			return
+		}
+
+		tui.App.QueueUpdateDraw(func() {
+			tui.originalPeers = peers
+			tui.filteredPeers = peers
+			tui.PeersList.SetTitle(fmt.Sprintf(" Peers(%d) ", len(peers)))
+			for i, peer := range peers {
+				tui.PeersList.AddItem(fmt.Sprintf("[%02d] %s", i+1, peer.PeerName), "", 0, func(index int) func() {
+					return func() {
+						tui.CurrentPeer = index
+						tui.updateContent()
+					}
+				}(i))
+			}
+			if len(peers) > 0 {
+				tui.updateContent()
+			}
+		})
+	}()
 
 	// Configure Logo
 	tui.Logo.SetTextAlign(tview.AlignCenter).
