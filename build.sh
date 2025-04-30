@@ -2,13 +2,16 @@
 
 # Pasta de saída
 OUTPUT_DIR="build"
-
-# Nome do executável
 APP_NAME="multiglass"
+ICON_PATH="bgp-lg.ico"
+MAC_ICON_PATH="iconbuilder.icns"
 
 # Limpar a pasta de build
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
+
+# Gerar rsrc para Windows
+rsrc -ico "$ICON_PATH" -o rsrc.syso
 
 # Função para compilar
 build() {
@@ -26,6 +29,11 @@ build() {
 
   if [ $? -eq 0 ]; then
     echo "Successfully built: $output_file"
+
+    # Criar pacote .app para macOS
+    if [ "$os" == "darwin" ]; then
+      appify --name "$APP_NAME" --icon "$MAC_ICON_PATH" "$output_file"
+    fi
   else
     echo "Failed to build: $os/$arch"
   fi
